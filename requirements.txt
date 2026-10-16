@@ -1,0 +1,11 @@
+langgraph>=0.2
+langchain-core>=0.3
+langchain-google-genai>=2.0
+tavily-python>=0.5
+chromadb>=0.5
+streamlit>=1.38
+beautifulsoup4>=4.12
+requests>=2.31
+python-dotenv>=1.0
+fpdf2>=2.7
+markdown>=3.5
