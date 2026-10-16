@@ -8,11 +8,16 @@ class FakeLLM:
     def __init__(self):
         self.review_calls = 0
 
+    calls = 0
+
     def invoke(self, prompt: str):
+        FakeLLM.calls += 1
         if "research planner" in prompt:
             out = '["What are EV adoption trends?", "How do EVs affect NO2 levels?"]'
-        elif "Extract the key facts" in prompt:
-            out = "- EV sales grew 35% in 2023\n- Cities saw lower NO2 near roads"
+        elif "research analyst" in prompt:
+            import json, re
+            ids = re.findall(r"=== SOURCE (\d+) ===", prompt)
+            out = json.dumps({i: "- EV sales grew 35% in 2023\n- Cities saw lower NO2" for i in ids})
         elif "research writer" in prompt:
             out = ("# EVs and Urban Air\n## Introduction\nEVs are growing [1].\n"
                    "## Key Findings\n### Adoption\nSales rose 35% [1][2].\n"
@@ -46,4 +51,4 @@ print("\n" + report)
 assert "## References" in report and len(state["sources"]) == 6
 pdf = report_to_pdf(report)
 assert pdf[:4] == b"%PDF"
-print(f"PDF OK ({len(pdf)} bytes). All tests passed.")
+print(f"PDF OK ({len(pdf)} bytes). LLM calls for this run: {FakeLLM.calls}. All tests passed.")

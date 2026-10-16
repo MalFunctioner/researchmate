@@ -136,23 +136,42 @@ Reply ONLY with a JSON array of strings."""
 
     # ---- node 3: analyst (extract notes -> memory)
     def analyst(self, state: ResearchState) -> dict:
+        """Reads ALL new sources in a single LLM call (keeps API usage low)."""
         by_id = {s["id"]: s for s in state["sources"]}
-        n = 0
-        for sid in state.get("new_source_ids", []):
-            s = by_id[sid]
-            prompt = f"""Extract the key facts, statistics, dates and viewpoints from this source
-that help answer the question. Write 3-6 concise bullet points. Only use information
-in the source. If it is irrelevant, reply exactly IRRELEVANT.
+        ids = [i for i in state.get("new_source_ids", []) if i in by_id]
+        if not ids:
+            return {"log": ["🧪 **Analyst** had no new sources to analyse."]}
+        per_source = max(1500, 40000 // len(ids))  # keep the whole prompt a sensible size
+        docs = "\n\n".join(
+            f"=== SOURCE {i} ===\nQuestion it was found for: {by_id[i]['question']}\n"
+            f"Title: {by_id[i]['title']}\nText: {by_id[i]['content'][:per_source]}"
+            for i in ids
+        )
+        prompt = f"""You are a research analyst. For EACH source below, extract the key facts,
+statistics, dates and viewpoints that help answer its question, as 3-6 concise bullet
+points. Use only information in that source. If a source is irrelevant, use "IRRELEVANT".
 
-Question: {s['question']}
-Source title: {s['title']}
-Source text:
-{s['content'][:config.MAX_PAGE_CHARS]}"""
-            notes = self.ask(prompt)
-            if "IRRELEVANT" in notes[:20].upper():
+Reply ONLY with a JSON object mapping source number to its notes, e.g.
+{{"1": "- fact one\\n- fact two", "2": "IRRELEVANT"}}
+
+{docs}"""
+        result = _json(self.ask(prompt), {})
+        n = 0
+        for key, notes in (result.items() if isinstance(result, dict) else []):
+            try:
+                sid = int(str(key).strip().split()[-1])
+            except ValueError:
                 continue
+            if sid not in by_id or not isinstance(notes, str) or "IRRELEVANT" in notes[:20].upper():
+                continue
+            s = by_id[sid]
             self.memory.add(notes, {"source_id": sid, "title": s["title"], "url": s["url"]})
             n += 1
+        if n == 0:  # model reply unusable -> fall back to raw text so the writer still has material
+            for sid in ids:
+                s = by_id[sid]
+                self.memory.add(s["content"][:1500], {"source_id": sid, "title": s["title"], "url": s["url"]})
+            n = len(ids)
         return {"log": [f"🧪 **Analyst** extracted notes from {n} source(s) and stored them in memory."]}
 
     # ---- node 4: writer (RAG over notes)

@@ -85,7 +85,17 @@ if go:
                 final_state.update({k: v for k, v in update.items() if k != "log"})
         except Exception as e:
             status.update(label="❌ Agent stopped with an error", state="error")
-            st.exception(e)
+            msg = str(e)
+            if "RESOURCE_EXHAUSTED" in msg or "429" in msg:
+                st.error(
+                    "**Gemini free-tier quota reached.** The free tier allows a limited number of "
+                    "requests per day *per model*. Either wait for it to reset, or switch to another "
+                    "Gemini model in ⚙️ Settings (each model has its own quota)."
+                )
+            elif "NOT_FOUND" in msg and "model" in msg.lower():
+                st.error("**Model not available.** Change the Gemini model name in ⚙️ Settings.")
+            else:
+                st.exception(e)
             st.stop()
         status.update(label="✅ Research complete", state="complete", expanded=False)
 
